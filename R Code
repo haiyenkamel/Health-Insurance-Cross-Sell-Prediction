@@ -1,0 +1,254 @@
+train <- read.csv("C:/Users/hkamel/Documents/Data Science course/data/train.csv")
+test <- read.csv("C:/Users/hkamel/Documents/Data Science course/data/test.csv")
+
+test$Response <- -1
+
+data <- rbind(train,test)
+
+# Install required packages
+packages <- c('ggplot2','tidyverse','ggcorrplot','scales','randomForest','caret')
+
+installed_packages <- packages %in% rownames(install.packages())
+if (any(installed_packages == FALSE)){
+  install.packages(packages[!installed_packages])
+}
+
+#Load the packages
+invisible(lapply(packages, library,character.only=TRUE))
+
+attach(data)
+dim(data)
+508146     12
+
+table(data$Response)
+-1      0      1 
+127037 334399  46710 
+
+
+# See structure of data
+str(data)
+'data.frame':	508146 obs. of  12 variables:
+  $ id                  : int  1 2 3 4 5 6 7 8 9 10 ...
+$ Gender              : chr  "Male" "Male" "Male" "Male" ...
+$ Age                 : int  44 76 47 21 29 24 23 56 24 32 ...
+$ Driving_License     : int  1 1 1 1 1 1 1 1 1 1 ...
+$ Region_Code         : num  28 3 28 11 41 33 11 28 3 6 ...
+$ Previously_Insured  : int  0 0 0 1 1 0 0 0 1 1 ...
+$ Vehicle_Age         : chr  "> 2 Years" "1-2 Year" "> 2 Years" "< 1 Year" ...
+$ Vehicle_Damage      : chr  "Yes" "No" "Yes" "No" ...
+$ Annual_Premium      : num  40454 33536 38294 28619 27496 ...
+$ Policy_Sales_Channel: num  26 26 26 152 152 160 152 26 152 152 ...
+$ Vintage             : int  217 183 27 203 39 176 249 72 28 80 ...
+$ Response            : num  1 0 1 0 0 0 0 1 0 0 ...
+
+
+# Check for missing values. No missing values found
+sapply(data, function(x) sum(is.na(x)))
+
+#Convert columns with text values in Training set
+data$Vehicle_Age <- ifelse(data$Vehicle_Age == "< 1 Year",0,
+                              ifelse(data$Vehicle_Age == "1-2 Year",1,
+                                ifelse(data$Vehicle_Age == "> 2 Years",2,FALSE)))
+
+data$Gender <- ifelse(data$Gender == "Male",1,0)
+
+data$Vehicle_Damage <- ifelse(data$Vehicle_Damage == "Yes",1,0)
+
+#converting a factor to a numeric variable
+for (i in 2:12){
+  data[,i] <- as.numeric(as.character(data[,i]))
+}
+  
+# It appears there is high negative correlation between Vehicle_Damage & Previsouly_Insured.
+# There is also high positive correlation between Vehicle_Age & Age. 
+# This might be resulting in multicollinearity in the model.
+
+corr <- cor(data[,-1])
+ggcorrplot(corr,hc.order = TRUE, type = "lower",lab = TRUE,ggtheme = ggplot2::theme_gray,
+           colors = c("#6D9EC1", "white", "#E46726")) 
+
+
+#converting categorical variables 
+cat <- c("Gender","Driving_License","Previously_Insured","Vehicle_Damage","Response")
+for (i in cat){
+  data[,i] <- as.factor(data[,i])
+}
+
+
+# Split data back to training set & testing set
+test <- subset(data,Response == -1)
+test <- subset(test,select = -12)
+
+train <- subset(data,Response == 0 | Response == 1)
+train$Response <- factor(train$Response)
+train <- train[,-1]
+
+# Bar graph or Response variable
+options(scipen = 999) ### turn off scientific notation like 1e-09
+
+ggplot(data = train,aes(x=Response,y=..count..)) + geom_bar(aes(fill=Gender),position="dodge")
+ggplot(data = train,aes(x=Response,y=..count..)) + geom_bar(aes(fill=Vehicle_Damage),position="dodge")
+ggplot(data = train,aes(x=Response,y=..count..)) + geom_bar(aes(fill=Driving_License),position="dodge")
+ggplot(data = train,aes(x=Response,y=..count..)) + geom_bar(aes(fill=Previously_Insured),position="dodge")
+
+ggplot(data = train,aes(x=Age)) + 
+  geom_histogram(aes(y=..density..),colour="white",binwidth=2) +  
+  geom_density(alpha=.2, fill="#FF6666") 
+
+
+# Imbalance dataset with 87.7% of customer with no interest and 12.3% of customer w/ interest
+
+table(train$Response)
+  0      1 
+334399  46710 
+prop.table(table(train$Response))
+  0         1 
+0.8774366 0.1225634 
+
+# A contingency table between Response & Gender (0=Female, 1=Male)
+round((prop.table(table(train$Response,train$Gender))),2)
+    0    1
+0 0.41 0.47
+1 0.05 0.07
+
+# A contingency table between Response & Vehicle Damage (0=No, 1=Yes)
+round((prop.table(table(train$Response,train$Vehicle_Damage))),2)
+    0    1
+0 0.49 0.38
+1 0.00 0.12
+
+# A contingency table between Response & Previously Insured (0=No, 1=Yes)
+round((prop.table(table(train$Response,train$Previously_Insured))),2)
+    0    1
+0 0.42 0.46
+1 0.12 0.00
+
+# A contingency table between Response & Driving License (0=No, 1=Yes)
+round((prop.table(table(train$Response,train$Driving_License))),2)
+    0    1
+0 0.00 0.88
+1 0.00 0.12
+
+
+set.seed(100)
+#Check for collinearity 
+install.packages("car")
+library(car)
+
+modelF <- glm(Response~.,data=train,family="binomial")
+modelNull <- glm(Response~1,data=train,family = "binomial")
+
+data.frame(vif(modelF)) # No Multicollinerity found
+                      GVIF Df GVIF..1..2.Df..
+Gender               1.016930  1        1.008430
+Age                  1.915678  1        1.384080
+Driving_License      1.002845  1        1.001422
+Region_Code          1.424859 52        1.003410
+Previously_Insured   1.074286  1        1.036478
+Vehicle_Age          1.936721  2        1.179687
+Vehicle_Damage       1.079249  1        1.038869
+Annual_Premium       1.255072  1        1.120300
+Policy_Sales_Channel 1.327606  1        1.152218
+Vintage              1.000225  1        1.000112
+
+#Performing Stepwise Selection
+modelF <- glm(Response~.,data=train[,-1],family="binomial")
+modelNull <- glm(Response~1,data=train[,-1],family = "binomial")
+stepwise <- step(object=modelNull,scope = list(lower=modelNull,upper=modelF),direction = "both")
+
+# Split train dataset to training & testing set
+set.seed(100)
+n <- nrow(train)
+ntrain <- round(n*0.7)
+tindex <- sample(n,ntrain)
+
+trainData <- train[tindex,]
+testData <- train[-tindex,]
+y_actual <- testData$Response
+
+
+# There is about 88% of the response is no and only 12% of the response is yes.
+# Clearly there is a class imbalance.
+prop.table(table(trainData$Response))
+  0         1 
+0.8770617 0.1229383 
+
+
+# Building the Logistic Regression Model 
+formula <- Response ~ Gender + Age + Driving_License + Region_Code + Previously_Insured + Vehicle_Age + Vehicle_Damage +
+           Annual_Premium + Policy_Sales_Channel + Vintage
+glm.fit <- glm(formula, data=trainData, family="binomial")
+print(glm.fit)
+
+# Predict test set using logistic model
+lg.prediction <- predict(glm.fit,newdata=testData,type="response")
+
+# Compute the accuracy, which is the proportion of y_pred that matches with y_actual. 
+y_pred <- factor(ifelse(lg.prediction > 0.5, 1, 0),levels=c(0,1))
+
+mean(y_pred == y_actual) 
+0.8779705
+
+
+# Confusion Matrix for downedSample dataset
+confusionMatrix(y_pred,y_actual,positive="1", mode="everything")
+
+install.packages("ROSE")
+library(ROSE)
+roc.curve(y_actual,lg.prediction,plotit = F)
+Area under the curve (AUC): 0.830
+
+#AUC ROC 
+install.packages("InformationValue")
+library(InformationValue)
+InformationValue::plotROC(y_actual, lg.prediction)
+InformationValue::AUROC(y_actual, lg.prediction)
+
+AUROC:  0.8295
+
+cbind(testData,prediction)
+
+# Random Forest
+memory.limit(24000)
+
+
+# Using trained model rf, predict test set response values
+rf <- randomForest(Response~., data=trainData, mtry=11, importance=TRUE)
+rf
+Call:
+  randomForest(formula = Response ~ ., data = trainData, mtry = 10,      importance = TRUE) 
+Type of random forest: classification
+Number of trees: 500
+No. of variables tried at each split: 10
+
+OOB estimate of  error rate: 13.53%
+Confusion matrix:
+  0    1 class.error
+0 226218 7761  0.03316964
+1  28325 4472  0.86364607
+
+rf.prediction <- predict(rf, newdata=testData, type="class")
+
+table(rf.prediction, y_actual)
+                  y_actual
+rf.prediction     0     1
+            0    97163 12053
+            1    3257  1860
+
+misclassification_error_rate <- sum(y_actual != rf.prediction) / nrow(testData)*100
+misclassification_error_rate
+13.39071
+
+
+important_var <- importance(rf)
+var_used <- varUsed(rf)
+rf.result <-  cbind(testData,rf.prediction)
+
+head(rf.result[,c("Response", "rf.prediction")],n=10)
+
+roc.curve(y_actual,rf.prediction,plotit = F)
+Area under the curve (AUC): 0.551
+
+library(InformationValue)
+InformationValue::plotROC(y_actual, rf.prediction)
+InformationValue::AUROC(y_actual, rf.prediction)
