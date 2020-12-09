@@ -1,9 +1,6 @@
-train <- read.csv("C:/Users/hkamel/Documents/Data Science course/data/train.csv")
-test <- read.csv("C:/Users/hkamel/Documents/Data Science course/data/test.csv")
+train <- read.csv("C:/Users/hkamel/Documents/Data Science course/data/train.csv", stringsAsFactors = TRUE)
+test <- read.csv("C:/Users/hkamel/Documents/Data Science course/data/test.csv", stringsAsFactors = TRUE)
 
-test$Response <- -1
-
-data <- rbind(train,test)
 
 # Install required packages
 packages <- c('ggplot2','tidyverse','ggcorrplot','scales','randomForest','caret')
@@ -16,84 +13,76 @@ if (any(installed_packages == FALSE)){
 #Load the packages
 invisible(lapply(packages, library,character.only=TRUE))
 
-attach(data)
-dim(data)
-508146     12
-
-table(data$Response)
--1      0      1 
-127037 334399  46710 
+attach(train)
+dim(train)
+[1] 381109     12
+summary(train)
 
 
 # See structure of data
-str(data)
-'data.frame':	508146 obs. of  12 variables:
-  $ id                  : int  1 2 3 4 5 6 7 8 9 10 ...
-$ Gender              : chr  "Male" "Male" "Male" "Male" ...
-$ Age                 : int  44 76 47 21 29 24 23 56 24 32 ...
-$ Driving_License     : int  1 1 1 1 1 1 1 1 1 1 ...
-$ Region_Code         : num  28 3 28 11 41 33 11 28 3 6 ...
-$ Previously_Insured  : int  0 0 0 1 1 0 0 0 1 1 ...
-$ Vehicle_Age         : chr  "> 2 Years" "1-2 Year" "> 2 Years" "< 1 Year" ...
-$ Vehicle_Damage      : chr  "Yes" "No" "Yes" "No" ...
-$ Annual_Premium      : num  40454 33536 38294 28619 27496 ...
-$ Policy_Sales_Channel: num  26 26 26 152 152 160 152 26 152 152 ...
-$ Vintage             : int  217 183 27 203 39 176 249 72 28 80 ...
-$ Response            : num  1 0 1 0 0 0 0 1 0 0 ...
-
+str(train)
 
 # Check for missing values. No missing values found
-sapply(data, function(x) sum(is.na(x)))
-
-#Convert columns with text values in Training set
-data$Vehicle_Age <- ifelse(data$Vehicle_Age == "< 1 Year",0,
-                              ifelse(data$Vehicle_Age == "1-2 Year",1,
-                                ifelse(data$Vehicle_Age == "> 2 Years",2,FALSE)))
-
-data$Gender <- ifelse(data$Gender == "Male",1,0)
-
-data$Vehicle_Damage <- ifelse(data$Vehicle_Damage == "Yes",1,0)
-
-#converting a factor to a numeric variable
-for (i in 2:12){
-  data[,i] <- as.numeric(as.character(data[,i]))
-}
-  
-# It appears there is high negative correlation between Vehicle_Damage & Previsouly_Insured.
-# There is also high positive correlation between Vehicle_Age & Age. 
-# This might be resulting in multicollinearity in the model.
-
-corr <- cor(data[,-1])
-ggcorrplot(corr,hc.order = TRUE, type = "lower",lab = TRUE,ggtheme = ggplot2::theme_gray,
-           colors = c("#6D9EC1", "white", "#E46726")) 
+sapply(train, function(x) sum(is.na(x)))
 
 
-#converting categorical variables 
-cat <- c("Gender","Driving_License","Previously_Insured","Vehicle_Damage","Response")
-for (i in cat){
-  data[,i] <- as.factor(data[,i])
-}
-
-
-# Split data back to training set & testing set
-test <- subset(data,Response == -1)
-test <- subset(test,select = -12)
-
-train <- subset(data,Response == 0 | Response == 1)
-train$Response <- factor(train$Response)
+#converting integer variables to a numeric variables
+train$Age <- as.numeric(train$Age)
+train$Vintage <- as.numeric(train$Vintage)
 train <- train[,-1]
 
-# Bar graph or Response variable
+#Convert columns with text values in Training set
+train$Vehicle_Age <- ifelse(train$Vehicle_Age == "< 1 Year",0,
+                            ifelse(train$Vehicle_Age == "1-2 Year",1,
+                                   ifelse(train$Vehicle_Age == "> 2 Years",2,FALSE)))
+train$Vehicle_Age <- as.factor(train$Vehicle_Age)
+
+train$Gender <- ifelse(train$Gender == "Male",1,0)
+train$Gender <- as.factor(train$Gender)
+
+train$Vehicle_Damage <- ifelse(train$Vehicle_Damage == "Yes",1,0)
+train$Vehicle_Damage <- as.factor(train$Vehicle_Damage)
+train$Previously_Insured <- as.factor(train$Previously_Insured)
+train$Driving_License <-as.factor(train$Driving_License)
+train$Response <- as.factor(train$Response)
+
+# Data visualization
 options(scipen = 999) ### turn off scientific notation like 1e-09
 
-ggplot(data = train,aes(x=Response,y=..count..)) + geom_bar(aes(fill=Gender),position="dodge")
-ggplot(data = train,aes(x=Response,y=..count..)) + geom_bar(aes(fill=Vehicle_Damage),position="dodge")
-ggplot(data = train,aes(x=Response,y=..count..)) + geom_bar(aes(fill=Driving_License),position="dodge")
-ggplot(data = train,aes(x=Response,y=..count..)) + geom_bar(aes(fill=Previously_Insured),position="dodge")
+
+ggplot(data = train,aes(x=Response)) + 
+  geom_bar(aes(fill=Gender),position = "dodge") + 
+  scale_fill_manual(values=c("#999999", "#E69F00"))
+
+ggplot(data = train,aes(x=Response)) + 
+  geom_bar(aes(fill=Vehicle_Damage),position="dodge") +
+  scale_fill_manual(values=c("#999999", "#E69F00"))
+
+ggplot(data = train,aes(x=Response)) + 
+  geom_bar(aes(fill=Previously_Insured),position = "dodge") +
+  scale_fill_manual(values=c("#999999", "#E69F00"),labels = c("No", "Yes"))
+
+ggplot(data=train,aes(x=Response,y=Age,color=Response)) +
+  geom_boxplot(outlier.colour="black", outlier.shape=16,
+               outlier.size=2, notch=FALSE)
+
 
 ggplot(data = train,aes(x=Age)) + 
-  geom_histogram(aes(y=..density..),colour="white",binwidth=2) +  
-  geom_density(alpha=.2, fill="#FF6666") 
+  geom_histogram(aes(y=..density..),colour="white",binwidth=2,fill=..density..) +  
+  geom_density(alpha=.2, fill="#FF6666",)
+
+chisq.test(Response,Gender)
+chisq.test(Response,Vehicle_Damage)
+chisq.test(Response,Previously_Insured)
+chisq.test(Response,Vehicle_Age)
+chisq.test(Response,Driving_License)
+
+
+# Correlation plots
+library(corrplot)
+library(RColorBrewer)
+corr <- cor(train[,-11])
+corrplot(corr,type="lower",method="number")
 
 
 # Imbalance dataset with 87.7% of customer with no interest and 12.3% of customer w/ interest
@@ -101,6 +90,7 @@ ggplot(data = train,aes(x=Age)) +
 table(train$Response)
   0      1 
 334399  46710 
+
 prop.table(table(train$Response))
   0         1 
 0.8774366 0.1225634 
@@ -130,32 +120,6 @@ round((prop.table(table(train$Response,train$Driving_License))),2)
 1 0.00 0.12
 
 
-set.seed(100)
-#Check for collinearity 
-install.packages("car")
-library(car)
-
-modelF <- glm(Response~.,data=train,family="binomial")
-modelNull <- glm(Response~1,data=train,family = "binomial")
-
-data.frame(vif(modelF)) # No Multicollinerity found
-                      GVIF Df GVIF..1..2.Df..
-Gender               1.016930  1        1.008430
-Age                  1.915678  1        1.384080
-Driving_License      1.002845  1        1.001422
-Region_Code          1.424859 52        1.003410
-Previously_Insured   1.074286  1        1.036478
-Vehicle_Age          1.936721  2        1.179687
-Vehicle_Damage       1.079249  1        1.038869
-Annual_Premium       1.255072  1        1.120300
-Policy_Sales_Channel 1.327606  1        1.152218
-Vintage              1.000225  1        1.000112
-
-#Performing Stepwise Selection
-modelF <- glm(Response~.,data=train[,-1],family="binomial")
-modelNull <- glm(Response~1,data=train[,-1],family = "binomial")
-stepwise <- step(object=modelNull,scope = list(lower=modelNull,upper=modelF),direction = "both")
-
 # Split train dataset to training & testing set
 set.seed(100)
 n <- nrow(train)
@@ -173,82 +137,115 @@ prop.table(table(trainData$Response))
   0         1 
 0.8770617 0.1229383 
 
-
-# Building the Logistic Regression Model 
-formula <- Response ~ Gender + Age + Driving_License + Region_Code + Previously_Insured + Vehicle_Age + Vehicle_Damage +
-           Annual_Premium + Policy_Sales_Channel + Vintage
-glm.fit <- glm(formula, data=trainData, family="binomial")
-print(glm.fit)
-
-# Predict test set using logistic model
-lg.prediction <- predict(glm.fit,newdata=testData,type="response")
-
-# Compute the accuracy, which is the proportion of y_pred that matches with y_actual. 
-y_pred <- factor(ifelse(lg.prediction > 0.5, 1, 0),levels=c(0,1))
-
-mean(y_pred == y_actual) 
-0.8779705
-
-
-# Confusion Matrix for downedSample dataset
-confusionMatrix(y_pred,y_actual,positive="1", mode="everything")
-
 install.packages("ROSE")
 library(ROSE)
-roc.curve(y_actual,lg.prediction,plotit = F)
-Area under the curve (AUC): 0.830
 
-#AUC ROC 
+#downsampling data
+
+set.seed(100)
+down_train <- ovun.sample(Response~., data=trainData,
+                          p=0.5,seed=1, method="under")$data
+
+table(down_train$Response)
+0     1 
+32891 32797 
+
+#UpSampling data
+set.seed(100)
+up_train <- ovun.sample(Response~., data=trainData,
+                          p=0.5,seed=1, method="over")$data
+
+table(up_train$Response)
+0      1 
+233979 234243 
+
+#Both
+both_train <- ovun.sample(Response~., data=trainData,
+                                N=nrow(trainData), p=0.5, 
+                                seed=1, method="both")$data
+table(both_train$Response)
+0      1 
+133198 133578
+
+# ROSE
+set.seed(100)
+train.rose <- ROSE(Response~., data  = trainData)$data                    
+table(train.rose$Response) 
+  0      1 
+133612 133164 
+
+
+formula <- Response ~ Gender + Age + Driving_License + Region_Code + Previously_Insured + Vehicle_Age + Vehicle_Damage +
+           Annual_Premium + Policy_Sales_Channel + Vintage
+formula.down <- Class ~ Gender + Age + Driving_License + Region_Code + Previously_Insured + Vehicle_Age + Vehicle_Damage +
+  Annual_Premium + Policy_Sales_Channel + Vintage
+
+install.packages("rpart")
+library(rpart)
+
+# Imbalanced dataset
+tree.fit <- rpart(Response~., data=trainData)
+tree.prediction <- predict(tree.fit,newdata=testData,type="class")
+table(y_actual,tree.prediction)
+roc.curve(y_actual,tree.prediction)
+
+# Building the Decision tree Model 
+tree.fit.down <- rpart(Response~., data=down_train)
+tree.fit.up <- rpart(Response~., data=up_train)
+tree.fit.rose <- rpart(Response~., data=train.rose)
+tree.fit.both <- rpart(Response~., data=both_train)
+
+# make predictions on test data
+tree.prediction.both <- predict(tree.fit.both,newdata=testData)
+tree.prediction.down <- predict(tree.fit.down,newdata=testData)
+tree.prediction.up <- predict(tree.fit.up,newdata=testData)
+tree.prediction.rose <- predict(tree.fit.rose,newdata=testData)
+
+# AUC score
+par(mfrow=c(2,2))
+roc.curve(y_actual,tree.prediction.both[,2],col = "RED", main = "ROC curve of Combination")
+roc.curve(y_actual,tree.prediction.rose[,2],col = "ORANGE", main = "ROC curve of ROSE")
+roc.curve(y_actual,tree.prediction.down[,2],col = "BLUE", main = "ROC curve of DownSample")
+roc.curve(y_actual,tree.prediction.up[,2],col = "BLUE", main = "ROC curve of UpSample")
+
+#Building logistic regression model using Upsampling data
+
+glm.fit <- glm(Response~., data=train.rose,family=binomial)
+prediction <- predict(glm.fit,newdata = testData,type="response")
+
+# Model diagnostic
+summary(glm.fit)
+
+
 install.packages("InformationValue")
 library(InformationValue)
-InformationValue::plotROC(y_actual, lg.prediction)
-InformationValue::AUROC(y_actual, lg.prediction)
+plotROC(y_actual,prediction)
 
-AUROC:  0.8295
+# misclassification error
 
-cbind(testData,prediction)
-
-# Random Forest
-memory.limit(24000)
+misClassError(y_actual, prediction, threshold = 0.5)
+0.3616
 
 
-# Using trained model rf, predict test set response values
-rf <- randomForest(Response~., data=trainData, mtry=11, importance=TRUE)
-rf
-Call:
-  randomForest(formula = Response ~ ., data = trainData, mtry = 10,      importance = TRUE) 
-Type of random forest: classification
-Number of trees: 500
-No. of variables tried at each split: 10
+# Confusion Matrix
+confusionMatrix(y_actual,prediction,threshold=0.5)
+    0     1
+0 59440   368
+1 40980 13545
 
-OOB estimate of  error rate: 13.53%
-Confusion matrix:
-  0    1 class.error
-0 226218 7761  0.03316964
-1  28325 4472  0.86364607
+specificity(y_actual,prediction,threshold = 0.5)
+0.591914
 
-rf.prediction <- predict(rf, newdata=testData, type="class")
+sensitivity(y_actual,prediction,threshold=0.5)
+0.9735499
 
-table(rf.prediction, y_actual)
-                  y_actual
-rf.prediction     0     1
-            0    97163 12053
-            1    3257  1860
+accuracy.meas(y_actual,prediction,threshold = 0.5)
 
-misclassification_error_rate <- sum(y_actual != rf.prediction) / nrow(testData)*100
-misclassification_error_rate
-13.39071
+Call: 
+  accuracy.meas(response = y_actual, predicted = prediction, threshold = 0.5)
 
+Examples are labelled as positive when predicted is greater than 0.5 
 
-important_var <- importance(rf)
-var_used <- varUsed(rf)
-rf.result <-  cbind(testData,rf.prediction)
-
-head(rf.result[,c("Response", "rf.prediction")],n=10)
-
-roc.curve(y_actual,rf.prediction,plotit = F)
-Area under the curve (AUC): 0.551
-
-library(InformationValue)
-InformationValue::plotROC(y_actual, rf.prediction)
-InformationValue::AUROC(y_actual, rf.prediction)
+precision: 0.249
+recall: 0.977
+F: 0.198
